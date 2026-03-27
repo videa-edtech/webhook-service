@@ -32,6 +32,10 @@ log("OKAY", "Imported: subprocess")
 from multiprocessing import Process, Queue
 log("OKAY", "Imported: multiprocessing")
 
+import getpass
+log("OKAY", "Imported: getpass")
+log("INFO", f"Starting Webhook Listener as {getpass.getuser()}")
+
 log("INFO", "Reading Configuration File")
 config = {}
 
@@ -77,22 +81,29 @@ def on_push(data):
 
     log("INFO", f"Received push from {repo} ref {data['ref']} triggered by {data['pusher']['name']}")
 
-    # Parse target branch name
-    branch = data["ref"].split("/")[2]
+    ref = data["ref"]
 
-    if (config["repos"][repo]["branch"] == branch):
-        p = Process(target=handle_push, args=(data,))
+    if (not ref.startswith("refs/heads/")):
+        log("INFO", f"Skipping this webhook since ref {ref} is not a branch ref.")
+        return "No Update", 200
+
+    branch = ref[len("refs/heads/"):]
+    repoConfig = config["repos"][repo]
+
+    if (branch in repoConfig):
+        p = Process(target=handle_push, args=(repo, branch, repoConfig[branch]))
         p.start()
 
         return "Success", 200
 
-    log("INFO", "Skipping this webhook since the branch does not match.")
+    log("INFO", f"Skipping this webhook since branch {branch} is not configured for {repo}.")
     return "No Update", 200
 
-def handle_push(data):
-    repo = data["repository"]["full_name"]
-    commands = config["repos"][repo]["command"]
-    path = config["repos"][repo]["path"]
+def handle_push(repo, branch, branchConfig):
+    commands = branchConfig["command"]
+    path = branchConfig["path"]
+
+    log("INFO", f"Handling push for {repo} branch {branch}")
 
     for command in commands:
         log("INFO", f"Executing Command: {Fore.LIGHTYELLOW_EX}\"{command}\" {Fore.WHITE}at {Fore.LIGHTCYAN_EX}\"{path}\"")

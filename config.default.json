@@ -4,13 +4,22 @@
 
 	"repos": {
 		"my/repo": {
-			"branch": "main",
-			"path": "/var/www/html",
-			"command": [
-				"git fetch",
-				"git pull origin main",
-				"git submodule update"
-			]
+			"main": {
+				"path": "/var/www/html",
+				"command": [
+					"git fetch",
+					"git pull origin main",
+					"git submodule update"
+				]
+			},
+			"dev/branch": {
+				"path": "/var/www/dev",
+				"command": [
+					"git fetch",
+					"git pull origin main",
+					"git submodule update"
+				]
+			}
 		}
 	}
 }

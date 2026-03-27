@@ -8,7 +8,9 @@
 from colorama import init
 from colorama import Fore, Style
 from inspect import currentframe
+from multiprocessing import current_process
 import atexit
+import datetime
 import time
 import re
 import os
@@ -16,15 +18,60 @@ import os
 #init
 init(autoreset=True)
 sticks = time.time()
+isMainProcess = current_process().name == "MainProcess"
+logDirectory = "logs"
+latestLogPath = os.path.join(logDirectory, "latest.log")
+maxArchivedLogs = 30
 
-if (not os.path.isdir("logs/")):
-	os.mkdir("logs/")
+if (not os.path.isdir(logDirectory)):
+	os.mkdir(logDirectory)
 
-logPath = f"logs/{(int)(sticks * 10000)}.log"
+logPath = latestLogPath
 
 def escape_ansi(line):
 	ansi_escape = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]")
 	return ansi_escape.sub("", line)
+
+def buildArchiveLogPath(timestamp = None):
+	if (timestamp is None):
+		timestamp = datetime.datetime.now()
+
+	baseName = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
+	archivePath = os.path.join(logDirectory, f"{baseName}.log")
+	index = 1
+
+	while os.path.exists(archivePath):
+		archivePath = os.path.join(logDirectory, f"{baseName}_{index}.log")
+		index += 1
+
+	return archivePath
+
+def cleanupOldLogs():
+	logFiles = []
+
+	for fileName in os.listdir(logDirectory):
+		if (fileName == "latest.log" or not fileName.endswith(".log")):
+			continue
+
+		filePath = os.path.join(logDirectory, fileName)
+
+		if (os.path.isfile(filePath)):
+			logFiles.append(filePath)
+
+	logFiles.sort(key = os.path.getmtime, reverse = True)
+
+	for filePath in logFiles[maxArchivedLogs:]:
+		os.remove(filePath)
+
+def archiveLatestLog():
+	if (not os.path.isfile(latestLogPath)):
+		return
+
+	if (os.path.getsize(latestLogPath) == 0):
+		os.remove(latestLogPath)
+		return
+
+	os.replace(latestLogPath, buildArchiveLogPath())
 
 def log(level, *args, resetCursor = False):
 	level = level.upper()
@@ -87,7 +134,12 @@ def log(level, *args, resetCursor = False):
 
 def logExitHandler():
 	log("INFO", "Program ended")
+	archiveLatestLog()
+	cleanupOldLogs()
 
-open(logPath, "w").close()
-log("INFO", "Log started at " + time.asctime(time.localtime()))
-atexit.register(logExitHandler)
+if (isMainProcess):
+	archiveLatestLog()
+	cleanupOldLogs()
+	open(logPath, "w").close()
+	log("INFO", "Log started at " + time.asctime(time.localtime()))
+	atexit.register(logExitHandler)
